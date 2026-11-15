@@ -306,6 +306,43 @@
     </div>
 
     <div style="margin-top:12px;padding-top:10px;border-top:1px dashed var(--bd)">
+      <b>🧾 تخصيص الوصل</b>
+      <label>الكلمة اللي تظهر على الوصل (بدل "حجز فندق")</label>
+      <input id="receiptTitleInput" placeholder="مثال: حجز شاليه / إيصال حجز / تأكيد حجز">
+      <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap">
+        <button class="b sm" onclick="saveReceiptTitle()">حفظ الكلمة</button>
+        <button class="b sec sm" onclick="resetReceiptTitle()">إعادة الافتراضي</button>
+      </div>
+
+      <label style="margin-top:12px">لوجو الوصل</label>
+      <div id="logoPreviewBox" style="display:none;margin:6px 0">
+        <img id="logoPreviewImg" alt="لوجو" style="max-width:110px;max-height:110px;border:1px solid var(--bd);border-radius:10px;background:#fff;padding:4px;display:block">
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="b sm" onclick="$('logoFileInput').click()">🖼️ اختيار لوجو</button>
+        <button class="b sec sm" id="logoRemoveBtn" style="display:none" onclick="removeLogo()">🗑️ حذف اللوجو</button>
+        <input id="logoFileInput" type="file" accept="image/*" style="display:none" onchange="handleLogoFile(this)">
+      </div>
+      <div class="m" style="font-size:12px;margin-top:4px">اللوجو بيظهر في ترويسة الوصل على الشمال.</div>
+    </div>
+
+    <div style="margin-top:12px;padding-top:10px;border-top:1px dashed var(--bd)">
+      <b>🎨 بانر البرنامج (الشريط اللي فوق)</b>
+      <label>صورة خلفية من المعرض</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="b sm" onclick="$('bannerFileInput').click()">🖼️ اختيار صورة</button>
+        <button class="b sec sm" id="bannerRemoveBtn" style="display:none" onclick="removeBanner()">🗑️ حذف الصورة</button>
+        <input id="bannerFileInput" type="file" accept="image/*" style="display:none" onchange="handleBannerFile(this)">
+      </div>
+      <label style="margin-top:10px">أو لون خلفية بسيط</label>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input id="bannerColorInput" type="color" value="#0f766e" style="width:60px;height:38px;padding:2px" oninput="setBannerColor(this.value)">
+        <button class="b sec sm" onclick="resetBannerColor()">بدون لون</button>
+      </div>
+      <div class="m" style="font-size:12px;margin-top:4px">لو اخترت صورة هي اللي هتظهر، ولو حذفتها هيرجع اللون (أو الشكل الافتراضي).</div>
+    </div>
+
+    <div style="margin-top:12px;padding-top:10px;border-top:1px dashed var(--bd)">
       <b>☁️ المزامنة السحابية الفورية (Firebase - اختياري)</b>
       <div class="m" style="font-size:12px;margin:4px 0 8px">اربط قاعدة بيانات Firebase Realtime مجانية لحفظ بياناتك على السحابة تلقائياً وفتحها من أي هاتف أو كمبيوتر.</div>
       <label>رابط قاعدة البيانات (Firebase Realtime DB URL)</label>
@@ -357,7 +394,8 @@
   var BACKUP_TS_KEY = 'booking_last_backup_v1';
   var DEFAULT_TITLE = '🏡 حجوزات الفلل والشقق';
 
-  var S = { biz: '', host: '', appTitle: DEFAULT_TITLE, props: [], bk: [], exp: [] };
+  var DEFAULT_RECEIPT_TITLE = 'حجز فندق';
+  var S = { biz: '', host: '', appTitle: DEFAULT_TITLE, receiptTitle: '', logo: '', banner: '', bannerColor: '', props: [], bk: [], exp: [] };
   var cloudCfg = { url: '', code: '' };
   var cloudTimer = null;
   var SYNC_TS_KEY = 'bk_sync_ts', DIRTY_KEY = 'bk_dirty';
@@ -453,6 +491,10 @@
           S.biz = parsed.biz || '';
           S.host = parsed.host || '';
           S.appTitle = parsed.appTitle || DEFAULT_TITLE;
+          S.receiptTitle = parsed.receiptTitle || '';
+          S.logo = parsed.logo || '';
+          S.banner = parsed.banner || '';
+          S.bannerColor = parsed.bannerColor || '';
           S.props = Array.isArray(parsed.props) ? parsed.props : [];
           S.bk = Array.isArray(parsed.bk) ? parsed.bk : [];
           S.exp = Array.isArray(parsed.exp) ? parsed.exp : [];
@@ -466,6 +508,8 @@
       ];
     }
     applyAppTitle();
+    applyBanner();
+    prepLogo();
   }
 
   function save() {
@@ -513,6 +557,173 @@
     say('تمت استعادة العنوان الافتراضي');
   }
 
+  // --- تخصيص الوصل (الكلمة + اللوجو) ---
+  var logoImg = null;
+
+  function rcptTitle() {
+    return (S.receiptTitle && S.receiptTitle.trim()) ? S.receiptTitle.trim() : DEFAULT_RECEIPT_TITLE;
+  }
+
+  function saveReceiptTitle() {
+    var inp = $('receiptTitleInput');
+    S.receiptTitle = inp ? inp.value.trim() : '';
+    if (!S.receiptTitle && inp) inp.value = DEFAULT_RECEIPT_TITLE;
+    save();
+    say('تم حفظ الكلمة اللي على الوصل ✅');
+  }
+
+  function resetReceiptTitle() {
+    S.receiptTitle = '';
+    if ($('receiptTitleInput')) $('receiptTitleInput').value = DEFAULT_RECEIPT_TITLE;
+    save();
+    say('تمت استعادة الكلمة الافتراضية');
+  }
+
+  function prepLogo(cb) {
+    if (!S.logo) { logoImg = null; if (cb) cb(); return; }
+    if (logoImg && logoImg._src === S.logo && logoImg.complete) { if (cb) cb(); return; }
+    var im = new Image();
+    im._src = S.logo;
+    im.onload = function() { logoImg = im; if (cb) cb(); };
+    im.onerror = function() { logoImg = null; if (cb) cb(); };
+    im.src = S.logo;
+  }
+
+  function refreshLogoPreview() {
+    var box = $('logoPreviewBox'), img = $('logoPreviewImg'), rm = $('logoRemoveBtn');
+    if (!box || !img) return;
+    if (S.logo) { img.src = S.logo; box.style.display = 'block'; if (rm) rm.style.display = ''; }
+    else { img.removeAttribute('src'); box.style.display = 'none'; if (rm) rm.style.display = 'none'; }
+  }
+
+  function handleLogoFile(input) {
+    var f = input.files && input.files[0];
+    if (!f) return;
+    if (!/^image\//.test(f.type)) { say('اختار ملف صورة فقط', true); input.value = ''; return; }
+    var reader = new FileReader();
+    reader.onload = function(ev) {
+      var im = new Image();
+      im.onload = function() {
+        var MAX = 320;
+        var r = Math.min(1, MAX / Math.max(im.width, im.height));
+        var w = Math.max(1, Math.round(im.width * r));
+        var h = Math.max(1, Math.round(im.height * r));
+        var c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        c.getContext('2d').drawImage(im, 0, 0, w, h);
+        try {
+          S.logo = c.toDataURL('image/png');
+        } catch (e) { say('تعذر قراءة الصورة', true); input.value = ''; return; }
+        prepLogo(function() {
+          save();
+          refreshLogoPreview();
+          say('تم إضافة اللوجو على الوصل ✅');
+        });
+        input.value = '';
+      };
+      im.onerror = function() { say('تعذر قراءة الصورة', true); input.value = ''; };
+      im.src = ev.target.result;
+    };
+    reader.onerror = function() { say('تعذر قراءة الملف', true); };
+    reader.readAsDataURL(f);
+  }
+
+  function removeLogo() {
+    S.logo = '';
+    logoImg = null;
+    save();
+    refreshLogoPreview();
+    say('تم حذف اللوجو');
+  }
+
+  // --- بانر البرنامج (صورة أو لون) ---
+  function applyBanner() {
+    var tb = document.querySelector('.topbar');
+    var h = $('appHeaderTitle');
+    if (!tb) return;
+    var rm = $('bannerRemoveBtn');
+    if (rm) rm.style.display = S.banner ? '' : 'none';
+    tb.style.backgroundImage = '';
+    tb.style.backgroundColor = '';
+    tb.style.backgroundSize = '';
+    tb.style.backgroundPosition = '';
+    tb.style.padding = '';
+    tb.style.minHeight = '';
+    tb.style.borderRadius = '';
+    if (h) { h.style.color = ''; h.style.textShadow = ''; }
+    if (S.banner) {
+      tb.style.backgroundImage = 'linear-gradient(rgba(0,0,0,.38),rgba(0,0,0,.38)), url("' + S.banner + '")';
+      tb.style.backgroundSize = 'cover';
+      tb.style.backgroundPosition = 'center';
+      tb.style.padding = '22px 16px';
+      tb.style.minHeight = '120px';
+      tb.style.borderRadius = '16px';
+      if (h) { h.style.color = '#fff'; h.style.textShadow = '0 2px 6px rgba(0,0,0,.6)'; }
+    } else if (S.bannerColor) {
+      tb.style.backgroundColor = S.bannerColor;
+      tb.style.padding = '14px 16px';
+      tb.style.borderRadius = '16px';
+      var m = /^#([0-9a-f]{6})$/i.exec(S.bannerColor);
+      if (m && h) {
+        var n = parseInt(m[1], 16);
+        var lum = (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255));
+        h.style.color = lum > 160 ? '#162420' : '#ffffff';
+      }
+    }
+  }
+
+  function handleBannerFile(input) {
+    var f = input.files && input.files[0];
+    if (!f) return;
+    if (!/^image\//.test(f.type)) { say('اختار ملف صورة فقط', true); input.value = ''; return; }
+    var reader = new FileReader();
+    reader.onload = function(ev) {
+      var im = new Image();
+      im.onload = function() {
+        var MAXW = 900;
+        var r = Math.min(1, MAXW / im.width);
+        var w = Math.max(1, Math.round(im.width * r));
+        var h = Math.max(1, Math.round(im.height * r));
+        var c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        var cx = c.getContext('2d');
+        cx.fillStyle = '#ffffff';
+        cx.fillRect(0, 0, w, h);
+        cx.drawImage(im, 0, 0, w, h);
+        try { S.banner = c.toDataURL('image/jpeg', 0.78); }
+        catch (e) { say('تعذر قراءة الصورة', true); input.value = ''; return; }
+        applyBanner();
+        save();
+        say('تم تغيير بانر البرنامج ✅');
+        input.value = '';
+      };
+      im.onerror = function() { say('تعذر قراءة الصورة', true); input.value = ''; };
+      im.src = ev.target.result;
+    };
+    reader.onerror = function() { say('تعذر قراءة الملف', true); };
+    reader.readAsDataURL(f);
+  }
+
+  function removeBanner() {
+    S.banner = '';
+    applyBanner();
+    save();
+    say('تم حذف صورة البانر');
+  }
+
+  function setBannerColor(v) {
+    S.bannerColor = v;
+    applyBanner();
+    save();
+  }
+
+  function resetBannerColor() {
+    S.bannerColor = '';
+    applyBanner();
+    save();
+    say('تم إلغاء لون البانر');
+  }
+
   function toggleSettingsPanel(forceState) {
     var box = $('settingsBox');
     if (!box) return;
@@ -520,6 +731,10 @@
     box.style.display = show ? 'block' : 'none';
     if (show) {
       if ($('appTitleInput')) $('appTitleInput').value = S.appTitle || DEFAULT_TITLE;
+      if ($('receiptTitleInput')) $('receiptTitleInput').value = rcptTitle();
+      refreshLogoPreview();
+      applyBanner();
+      if ($('bannerColorInput') && S.bannerColor) $('bannerColorInput').value = S.bannerColor;
       if ($('cloudUrlInput')) $('cloudUrlInput').value = cloudCfg.url || '';
       if ($('cloudKeyInput')) $('cloudKeyInput').value = cloudCfg.code || '';
       updateCloudStatus(cloudCfg.url && cloudCfg.code ? 'مربوط بالسحابة ✅ (' + cloudCfg.code + ')' : 'غير مربوط بالسحابة (يعمل أوفلاين حالياً)');
@@ -686,6 +901,10 @@
         biz: st.biz || '',
         host: st.host || '',
         appTitle: st.appTitle || DEFAULT_TITLE,
+        receiptTitle: st.receiptTitle || '',
+        logo: st.logo || '',
+        banner: st.banner || '',
+        bannerColor: st.bannerColor || '',
         props: st.props,
         bk: Array.isArray(st.bk) ? st.bk : [],
         exp: Array.isArray(st.exp) ? st.exp : []
@@ -693,6 +912,8 @@
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(S)); } catch (e) {}
       setSyncState(data.updatedAt || Date.now(), false);
       applyAppTitle();
+      applyBanner();
+      prepLogo();
       tab(cur);
       updateCloudStatus('✅ تم استرجاع أحدث نسخة من السحابة');
       say(manual ? 'تم تحديث البيانات من السحابة بنجاح ☁️✅' : 'تم تحديث البيانات من جهازك الآخر ☁️');
@@ -776,11 +997,17 @@
           biz: data.biz || '',
           host: data.host || '',
           appTitle: data.appTitle || DEFAULT_TITLE,
+          receiptTitle: data.receiptTitle || '',
+          logo: data.logo || '',
+          banner: data.banner || '',
+          bannerColor: data.bannerColor || '',
           props: data.props,
           bk: Array.isArray(data.bk) ? data.bk : [],
           exp: Array.isArray(data.exp) ? data.exp : []
         };
         applyAppTitle();
+        applyBanner();
+        prepLogo();
         save();
         tab(0);
         say('تم استيراد النسخة الاحتياطية بنجاح ✅');
@@ -1909,7 +2136,7 @@
     var hostName = b.phost || S.host || '';
     var dateTxt = rng(b.from, b.to, b.ft, b.tt);
     var lines = [
-      (S.biz ? S.biz + ' — ' : '') + 'حجز فندق ✅'
+      (S.biz ? S.biz + ' — ' : '') + rcptTitle() + ' ✅'
     ];
     if (b.pn) lines.push('العقار: ' + b.pn);
     if (b.name) lines.push('العميل: ' + b.name);
@@ -2039,17 +2266,35 @@
     x.fillStyle = '#c59b48';
     x.fillRect(14, 165, W - 28, 5);
 
+    // اللوجو (يمين الترويسة على الشمال)
+    var hdrTextW = W - 92;
+    if (logoImg && S.logo) {
+      var LB = 118, lx = 40, ly = 14 + (155 - LB) / 2;
+      x.fillStyle = '#ffffff';
+      x.beginPath();
+      if (x.roundRect) x.roundRect(lx, ly, LB, LB, 18); else x.rect(lx, ly, LB, LB);
+      x.fill();
+      x.strokeStyle = '#c59b48';
+      x.lineWidth = 2;
+      x.stroke();
+      var pad = 8, bw = LB - pad * 2;
+      var lr = Math.min(bw / logoImg.width, bw / logoImg.height);
+      var dw = logoImg.width * lr, dh = logoImg.height * lr;
+      x.drawImage(logoImg, lx + (LB - dw) / 2, ly + (LB - dh) / 2, dw, dh);
+      hdrTextW = W - 92 - (LB + 30);
+    }
+
     x.direction = 'rtl';
     x.textAlign = 'right';
 
     // عنوان الترويسة
     x.fillStyle = '#ffffff';
     x.font = 'bold 38px ' + F;
-    x.fillText(S.biz ? S.biz : 'حجز فندق', W - 46, 78, W - 92);
+    x.fillText(S.biz ? S.biz : rcptTitle(), W - 46, 78, hdrTextW);
 
     x.fillStyle = '#f3d999';
     x.font = 'bold 23px ' + F;
-    x.fillText('حجز فندق · رقم #' + String(b.id).slice(-5), W - 46, 126);
+    x.fillText(rcptTitle() + ' · رقم #' + String(b.id).slice(-5), W - 46, 126, hdrTextW);
 
     // بيانات العقار والتاريخ
     if (hasPropTitle) {
@@ -2130,6 +2375,10 @@
 
   function renderReceiptScreen(b, isQuick) {
     currentReceiptObj = b;
+    prepLogo(function() { drawReceiptScreen(b, isQuick); });
+  }
+
+  function drawReceiptScreen(b, isQuick) {
     var canvas = renderReceiptCanvas(b);
     var dataUrl = canvas.toDataURL('image/png');
     var backBtn = isQuick
@@ -2137,7 +2386,7 @@
       : '<button class="b sec full" style="margin-top:10px" onclick="tab(2)">رجوع للحجوزات</button>';
 
     $('v').innerHTML = '<div class="c">' +
-      '<img alt="حجز فندق" style="width:100%;border:1px solid var(--bd);border-radius:12px;display:block" src="' + dataUrl + '">' +
+      '<img alt="' + esc(rcptTitle()) + '" style="width:100%;border:1px solid var(--bd);border-radius:12px;display:block" src="' + dataUrl + '">' +
       '<div class="g2" style="margin-top:12px">' +
         '<button class="b" onclick="saveCurrentReceipt()">💾 حفظ الصورة</button>' +
         '<button class="b sec" onclick="shareCurrentReceipt()">📤 مشاركة الوصل</button>' +
@@ -2176,7 +2425,7 @@
           if (navigator.canShare && navigator.canShare({ files: [file] })) {
             navigator.share({
               files: [file],
-              title: 'حجز فندق'
+              title: rcptTitle()
             }).catch(function() {});
             return;
           }
